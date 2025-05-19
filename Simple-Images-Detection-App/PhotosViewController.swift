@@ -17,5 +17,17 @@ class PhotosViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         imageView.image = takenImage
+        
+        // takenImage があるなら API を呼ぶ
+        if let image = takenImage,
+           let imageData = image.jpegData(compressionQuality: 0.8) {
+            Task {
+                let resultText = await MachineLearningHelper.shared.generateTextfromImage(imageData: imageData)
+                // UI の更新はメインスレッドで
+                DispatchQueue.main.async {
+                    self.generatedTextLabel.text = resultText
+                }
+            }
+        }
     }
 }
