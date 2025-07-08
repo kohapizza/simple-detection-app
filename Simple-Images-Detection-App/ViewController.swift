@@ -7,25 +7,36 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     
     // 撮った写真を入れておく場所（あとで次の画面にわたす）
     var capturedImage: UIImage?
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        // カメラの設定：どこから写真をとるか（今回はカメラ）
         imagePicker.delegate = self
-        imagePicker.sourceType = .camera
     }
 
     // 「写真を撮る」ボタンが押されたときに呼ばれる
     @IBAction func takePhoto(_ sender: UIButton) {
-        // カメラが使えるかどうかをチェック
+        let alert = UIAlertController(title: "画像を選択", message: "画像の取得方法を選んでください", preferredStyle: .actionSheet)
+        
+        // カメラから
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            // カメラ画面を表示する
-            present(imagePicker, animated: true)
-        } else {
-            // カメラが使えないときのメッセージ
-            print("カメラが使えません")
+            alert.addAction(UIAlertAction(title: "カメラで撮影", style: .default, handler: { _ in
+                self.imagePicker.sourceType = .camera
+                self.present(self.imagePicker, animated: true)
+            }))
         }
+
+        // フォトライブラリから
+        if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
+            alert.addAction(UIAlertAction(title: "フォトライブラリから選択", style: .default, handler: { _ in
+                self.imagePicker.sourceType = .photoLibrary
+                self.present(self.imagePicker, animated: true)
+            }))
+        }
+
+        // キャンセル
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+
+        present(alert, animated: true)
     }
 
     // 写真を撮ったあとに呼ばれる
