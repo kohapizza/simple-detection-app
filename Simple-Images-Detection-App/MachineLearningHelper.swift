@@ -16,10 +16,15 @@ class MachineLearningHelper {
     typealias Content = Message.ChatCompletionUserMessageParam.Content
     typealias Detail = Content.VisionContent.ChatCompletionContentPartImageParam.ImageURL.Detail
     
+    enum ImageSource {
+        case data(Data)
+        case url(URL)
+    }
+
 
     // OpenAIを使うための設定。自分のAPIキーを入力する
     
-    private let openAI = OpenAI(apiToken: "API_KEY")
+    private let openAI = OpenAI(apiToken: "")
     
     // 画像をもとに、AIに「何が映っているか」を説明してもらう関数
     // 質問のテキストをカスタマイズしてみよう！
@@ -52,78 +57,80 @@ class MachineLearningHelper {
         return "分析に失敗しました"
     }
     
-    // 複数の画像, textを受け取ってVisionContentを返す
-//    private static func buildVisionContents(withImages images: [Data], text: String, detail: Detail = .auto) -> [Content.VisionContent] {
-//        var visionContents: [Content.VisionContent] = [.init(chatCompletionContentPartTextParam: .init(text: text))]
-//        for data in images {
-//            // Base64に変換してData URIスキームとして埋め込む
-//            let base64String = data.base64EncodedString()
-//            let dataURLString = "data:image/jpeg;base64,\(base64String)"
-//            visionContents.append(
-//                .init(chatCompletionContentPartImageParam: .init(imageUrl: .init(url: dataURLString, detail: detail)))
-//            )
-//        }
-//        return visionContents
-//    }
-    
-//    private static func buildMessages(text: String, images: [Data], systemMessage: String? = nil, detail: Detail = .auto) -> [ChatQuery.ChatCompletionMessageParam] {
-//        let visionContents = buildVisionContents(withImages: images, text: text, detail: detail)
-//        var messages: [ChatQuery.ChatCompletionMessageParam] = [.init(role: .user, content: visionContents)!]
-//        if let systemMessage {
-//            messages.append(.init(role: .system, content: systemMessage)!)
-//        }
-//        return messages
-//    }
-//    
-//    public func sendMessage(text: String, images: [Data], systemMessage: String? = nil, detail: Detail = .auto, maxTokens: Int? = nil) -> AsyncThrowingStream<ChatStreamResult, Error> {
-//        print("Sending \(images.count) images. Total size: \(images.reduce(0) { $0 + $1.count }) bytes")
-//        let messages = MachineLearningHelper.buildMessages(text: text, images: images, systemMessage: systemMessage, detail: detail)
-//        return sendStream(messages: messages, maxTokens: maxTokens)
-//    }
-//    
-//    private func sendStream(messages: [ChatQuery.ChatCompletionMessageParam], maxTokens: Int? = nil) -> AsyncThrowingStream<ChatStreamResult, Error> {
-//        let query = ChatQuery(messages: messages, model: .gpt4_o, maxTokens: maxTokens)
-//        return openAI.chatsStream(query: query)
-//    }
-    
+    // MARK: - Private Methods
+    private func send(messages: [ChatQuery.ChatCompletionMessageParam], maxTokens: Int? = nil) async throws -> ChatResult {
+        let query = ChatQuery(messages: messages, model: .gpt4_o, maxTokens: maxTokens)
+        return try await openAI.chats(query: query)
+    }
 
-//    func analyzeVideoFrames(videoURL: URL) async throws -> AsyncThrowingStream<ChatStreamResult, Error> {
-//        // フレームを抽出（1秒ごと）
-//        let cgImages = try await VideoUtils.extractFrames(from: videoURL, timeInterval: 5.0)
-//        
-//        print("抽出されたフレーム数: \(cgImages.count)")
-//        
-//        // CGImage -> UIImage -> Data
-//        let imageDataArray: [Data] = cgImages.compactMap { cgImage in
-//            let uiImage = UIImage(cgImage: cgImage)
-//            if let data = uiImage.jpegData(compressionQuality: 0.8) {
-//                return data
-//            } else {
-//                print("⚠️ jpegDataの変換に失敗しました（CGImageから作成したUIImageが不正な可能性）")
-//                return nil
-//            }
-//        }
-//        
-//        // もし画像が1つも取得できなければエラーにする
-//        guard !imageDataArray.isEmpty else {
-//            print("❌ jpegData変換後のデータ配列が空です。")
-//            throw NSError(domain: "VideoAnalysis", code: -1, userInfo: [NSLocalizedDescriptionKey: "フレームが抽出できませんでした（画像データ生成に失敗）"])
-//        }
-//        
-//        // 質問文
-//        let prompt = """
-//        以下の画像は、動画から抽出した連続するフレームです。この動画では何が起きていますか？全体の内容を時系列で要約してください。
-//        """
-//        
-//        // MachineLearningHelperからストリームを取得
-//        let helper = MachineLearningHelper.shared
-//        return helper.sendMessage(
-//            text: prompt,
-//            images: imageDataArray,
-//            detail: .low,
-//            maxTokens: 300
-//        )
-//    }
-    
-    
+    private func sendStream(messages: [ChatQuery.ChatCompletionMessageParam], maxTokens: Int? = nil) -> AsyncThrowingStream<ChatStreamResult, Error> {
+        let query = ChatQuery(messages: messages, model: .gpt4_o, maxTokens: maxTokens)
+        return openAI.chatsStream(query: query)
+    }
+
+    private static func buildVisionContents(withImages images: [Data], text: String, detail: Detail = .auto) -> [Content.VisionContent] {
+        var visionContents: [Content.VisionContent] = [.init(chatCompletionContentPartTextParam: .init(text: text))]
+        for data in images {
+            visionContents.append(
+                .init(chatCompletionContentPartImageParam: .init(imageUrl: .init(url: data, detail: detail)))
+            )
+        }
+        return visionContents
+    }
+
+    private static func buildVisionContents(withImage imageSource: ImageSource, text: String, detail: Detail = .auto) -> [Content.VisionContent] {
+        var visionContents: [Content.VisionContent] = [.init(chatCompletionContentPartTextParam: .init(text: text))]
+        switch imageSource {
+        case let .data(imageData):
+            visionContents.append(
+                .init(chatCompletionContentPartImageParam: .init(imageUrl: .init(url: imageData, detail: detail)))
+            )
+        case let .url(imageURL):
+            visionContents.append(
+                .init(chatCompletionContentPartImageParam: .init(imageUrl: .init(url: imageURL.path, detail: detail)))
+            )
+        }
+        return visionContents
+    }
+
+    private static func buildMessages(text: String, image: ImageSource? = nil, systemMessage: String? = nil) -> [ChatQuery.ChatCompletionMessageParam] {
+        var messages: [ChatQuery.ChatCompletionMessageParam] = []
+        if let image {
+            messages.append(.init(role: .user, content: MachineLearningHelper.buildVisionContents(withImage: image, text: text))!)
+        } else {
+            messages.append(.init(role: .user, content: text)!)
+        }
+        if let systemMessage {
+            messages.append(.init(role: .system, content: systemMessage)!)
+        }
+        return messages
+    }
+
+    private static func buildMessages(text: String, images: [Data], systemMessage: String? = nil, detail: Detail = .auto) -> [ChatQuery.ChatCompletionMessageParam] {
+        let visionContents = buildVisionContents(withImages: images, text: text, detail: detail)
+        var messages: [ChatQuery.ChatCompletionMessageParam] = [.init(role: .user, content: visionContents)!]
+        if let systemMessage {
+            messages.append(.init(role: .system, content: systemMessage)!)
+        }
+        return messages
+    }
+
+    // MARK: - Public Methods
+
+    public func sendMessage(text: String, image: ImageSource? = nil, systemMessage: String? = nil) async throws -> String {
+        let messages = MachineLearningHelper.buildMessages(text: text, image: image, systemMessage: systemMessage)
+        return try await send(messages: messages).choices.first?.message.content?.string ?? ""
+    }
+
+    public func sendMessage(text: String, image: ImageSource? = nil, systemMessage: String? = nil) -> AsyncThrowingStream<ChatStreamResult, Error> {
+        print("\(type(of: self))/\(#function)")
+        let messages = MachineLearningHelper.buildMessages(text: text, image: image, systemMessage: systemMessage)
+        return sendStream(messages: messages)
+    }
+
+    public func sendMessage(text: String, images: [Data], systemMessage: String? = nil, detail: Detail = .auto, maxTokens: Int? = nil) -> AsyncThrowingStream<ChatStreamResult, Error> {
+        print("Sending \(images.count) images. Total size: \(images.reduce(0) { $0 + $1.count }) bytes")
+        let messages = MachineLearningHelper.buildMessages(text: text, images: images, systemMessage: systemMessage, detail: detail)
+        return sendStream(messages: messages, maxTokens: maxTokens)
+    }
 }

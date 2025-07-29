@@ -16,7 +16,7 @@ class RealtimeCameraManager: ObservableObject {
     private var lastProcessedTime: CFAbsoluteTime = 0
     private var lastAccumulatedTime: CFAbsoluteTime = 0
     let context = CIContext()
-    let openAI = OpenAIClient()
+    let openAI = MachineLearningHelper()
 
     private var prevText: String? = nil
     private var isSending: Bool = false

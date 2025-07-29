@@ -13,7 +13,7 @@ class PhotosViewController: UIViewController {
     @IBOutlet weak var imageView: UIImageView!
     @IBOutlet weak var generatedTextLabel: UILabel!
     
-    private let promptText: String = "Provide a summary of the video. Respond in Markdown."
+    private let promptText: String = "以下の動画には何が映っていますか？説明してください。"
     
     private var resultText: String = ""
 
@@ -30,8 +30,10 @@ class PhotosViewController: UIViewController {
         } else if let videoURL = takenVideoURL {
             imageView.isHidden = true
             playVideo(videoURL)
+            summarizeVideo()
         }
     }
+
 
     private func recognizeImage(_ image: UIImage) {
         guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
@@ -45,14 +47,16 @@ class PhotosViewController: UIViewController {
 
     
     func summarizeVideo() {
+        guard let videoURL = takenVideoURL else { return }
         Task {
             do {
                 let images = try await VideoSummarizeHelper.extractFrames(from: videoURL)
-                for try await result in OpenAIClient().sendMessage(text: "These are video frames.", images: images, systemMessage: promptText) {
+                for try await result in MachineLearningHelper().sendMessage(text: "These are video frames.", images: images, systemMessage: promptText) {
                     guard let choice = result.choices.first else { return }
                     let message = choice.delta.content ?? ""
                     Task.detached { @MainActor in
-                        resultText += message
+                        self.resultText += message
+                        self.generatedTextLabel.text = self.resultText
                     }
                     if let finishReason = choice.finishReason {
                         print("Stream finished with reason:\(finishReason).")
@@ -60,10 +64,11 @@ class PhotosViewController: UIViewController {
                     }
                 }
             } catch {
-                fatalError("Failed to send messages with error: \(error)")
+                print("Failed to summarize video with error: \(error)")
             }
         }
     }
+
 
 
     private func playVideo(_ url: URL) {
